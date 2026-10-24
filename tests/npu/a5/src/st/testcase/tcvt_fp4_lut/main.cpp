@@ -166,8 +166,9 @@ protected:
                 source[byte] = static_cast<uint8_t>(byte * 37 + (byte / 256) * 11);
             }
         }
-        std::vector<uint8_t> expected(test.destinationRows * test.destinationCols + 2 * kGuardBytes, kCanary);
-        size_t panelRows = test.compact ? ((rows + 15) / 16) * 16 : test.destinationRows;
+        const size_t storageRows = test.destinationRows + (test.compact == 2 ? 1 : 0);
+        std::vector<uint8_t> expected(storageRows * test.destinationCols + 2 * kGuardBytes, kCanary);
+        size_t panelRows = test.compact ? ((rows + 15) / 16) * 16 + (test.compact == 2 ? 1 : 0) : test.destinationRows;
         std::array<bool, 256> seen{};
         for (int row = 0; row < rows; ++row) {
             for (int col = 0; col < cols; ++col) {
@@ -180,8 +181,9 @@ protected:
                 expected[kGuardBytes + physical] = encodeE4M3(decodeFp4(nibble));
             }
         }
-        bool fullBulkFixture =
-            id >= static_cast<int>(Fp4LutCaseId::Bulk64ND) && rows == test.validRows && cols == test.validCols;
+        bool fullBulkFixture = id >= static_cast<int>(Fp4LutCaseId::Bulk64ND) &&
+                               id <= static_cast<int>(Fp4LutCaseId::Bulk128CompactNZ) && rows == test.validRows &&
+                               cols == test.validCols;
         if (id == static_cast<int>(Fp4LutCaseId::MainND) || id == static_cast<int>(Fp4LutCaseId::MainNZ) ||
             fullBulkFixture) {
             for (int packed = 0; packed < 256; ++packed) {

@@ -12,7 +12,7 @@ See LICENSE in the root of the software repository for the full text of the Lice
 #define TCVT_FP4_LUT_CASES_H_
 
 // name, source rows/columns, destination rows/columns, valid rows/columns,
-// NZ destination, compact Normal, dynamic valid extents.
+// NZ destination, compact mode (0 Null, 1 Normal, 2 RowPlusOne), dynamic valid extents.
 #define FP4_LUT_CASES(M)                                                \
     M(MainND, 32, 512, 32, 512, 32, 512, false, false, false)           \
     M(MainNZ, 32, 512, 32, 512, 32, 512, true, false, false)            \
@@ -37,7 +37,13 @@ See LICENSE in the root of the software repository for the full text of the Lice
     M(Bulk64CompactNZ, 20, 128, 32, 192, 20, 128, true, true, true)     \
     M(Bulk128ND, 20, 256, 32, 320, 20, 256, false, false, true)         \
     M(Bulk128NZ, 20, 256, 32, 320, 20, 256, true, false, true)          \
-    M(Bulk128CompactNZ, 20, 256, 32, 320, 20, 256, true, true, true)
+    M(Bulk128CompactNZ, 20, 256, 32, 320, 20, 256, true, true, true)    \
+    M(RowPlusOneFull, 128, 256, 128, 256, 128, 256, true, 2, false)     \
+    M(RowPlusOneTail, 5, 640, 32, 704, 3, 579, true, 2, true)           \
+    M(RowPlusOneMinimum, 1, 64, 16, 96, 1, 1, true, 2, true)            \
+    M(RowPlusOneBulk64, 20, 128, 32, 192, 19, 128, true, 2, true)       \
+    M(RowPlusOneBulk128, 20, 256, 32, 320, 19, 256, true, 2, true)      \
+    M(RowPlusOneRegisterTail, 2, 512, 32, 544, 1, 257, true, 2, true)
 
 struct Fp4LutCase {
     const char* name;
@@ -48,7 +54,7 @@ struct Fp4LutCase {
     int validRows;
     int validCols;
     bool nz;
-    bool compact;
+    int compact;
     bool dynamic;
 };
 

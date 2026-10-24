@@ -19,6 +19,7 @@ See LICENSE in the root of the software repository for the full text of the Lice
 #ifndef TCVT_COMMON_HPP
 #define TCVT_COMMON_HPP
 
+#include <pto/common/tcvt_fp4.hpp>
 #include <pto/common/constants.hpp>
 #include <pto/common/utils.hpp>
 #include <array>
@@ -2972,6 +2973,9 @@ __tf__ PTO_INTERNAL OP_NAME(TCVT) OP_TYPE(element_wise) void implTCVTFp4E2M1ToE4
     if constexpr (TileDataD::SFractal != SLayout::NoneBox && TileDataD::Compact == CompactMode::Normal) {
         panelRows = CeilDivision(validRows, static_cast<uint32_t>(FRACTAL_NZ_ROW)) * FRACTAL_NZ_ROW;
     }
+    if constexpr (TileDataD::Compact == CompactMode::RowPlusOne) {
+        panelRows = CeilDivision(validRows, static_cast<uint32_t>(FRACTAL_NZ_ROW)) * FRACTAL_NZ_ROW + 1u;
+    }
     __ubuf__ uint8_t* dstPtr = (__ubuf__ uint8_t*)__cce_get_tile_ptr(dst);
     __ubuf__ uint8_t* srcPtr = (__ubuf__ uint8_t*)__cce_get_tile_ptr(src);
     __VEC_SCOPE__
@@ -3056,44 +3060,9 @@ __tf__ PTO_INTERNAL OP_NAME(TCVT) OP_TYPE(element_wise) void implTCVTFp4E2M1ToE4
 template <typename TileDataD, typename TileDataS>
 PTO_INTERNAL void tcvtFp4E2M1ToE4M3(TileDataD& dst, TileDataS& src)
 {
-    static_assert(
-        TileDataS::Loc == TileType::Vec && TileDataD::Loc == TileType::Vec,
-        "TCVT FP4 E2M1 -> FP8 E4M3 requires Vec source and destination.");
-    static_assert(
-        TileDataS::isRowMajor && TileDataS::SFractal == SLayout::NoneBox && TileDataS::Compact == CompactMode::Null,
-        "TCVT FP4 E2M1 -> FP8 E4M3 source must be ND with CompactMode::Null.");
-    static_assert(
-        TileDataS::Cols >= 64 && TileDataS::Cols % 64 == 0,
-        "TCVT FP4 E2M1 -> FP8 E4M3 source rows require a multiple of 64 logical columns.");
-    constexpr bool dstND = TileDataD::isRowMajor && TileDataD::SFractal == SLayout::NoneBox;
-    constexpr bool dstNZ = !TileDataD::isRowMajor && TileDataD::SFractal == SLayout::RowMajor &&
-                           TileDataD::SFractalSize == TileConfig::fractalABSize;
-    static_assert(dstND || dstNZ, "TCVT FP4 E2M1 -> FP8 E4M3 destination must be ND or standard 512-byte NZ.");
-    static_assert(
-        TileDataD::Compact != CompactMode::RowPlusOne,
-        "TCVT FP4 E2M1 -> FP8 E4M3 does not support RowPlusOne extra-row storage.");
-    static_assert(
-        TileDataD::Compact == CompactMode::Null || (dstNZ && TileDataD::Compact == CompactMode::Normal),
-        "TCVT FP4 E2M1 -> FP8 E4M3 supports Null, or Normal for NZ.");
-    static_assert(
-        !dstNZ || TileDataD::Rows % FRACTAL_NZ_ROW == 0, "TCVT FP8 NZ physical rows must be a multiple of 16.");
-    static_assert(!dstNZ || TileDataD::Rows <= 0xFFFF, "TCVT FP8 NZ row pitch must fit the 16-bit block stride.");
-    static_assert(
-        static_cast<uint64_t>(TileDataS::Rows) * (TileDataS::Cols / 2) <= 0x7FFFFFFF &&
-            static_cast<uint64_t>(TileDataD::Rows) * TileDataD::Cols <= 0x7FFFFFFF,
-        "TCVT FP4 E2M1 -> FP8 E4M3 byte offsets must fit signed 32 bits.");
-    static_assert(
-        TileDataD::ValidRow == DYNAMIC || TileDataS::ValidRow == DYNAMIC || TileDataD::ValidRow == TileDataS::ValidRow,
-        "TCVT FP4 E2M1 -> FP8 E4M3 valid rows must agree.");
-    static_assert(
-        TileDataD::ValidCol == DYNAMIC || TileDataS::ValidCol == DYNAMIC || TileDataD::ValidCol == TileDataS::ValidCol,
-        "TCVT FP4 E2M1 -> FP8 E4M3 logical valid columns must agree.");
     uint32_t rows = dst.GetValidRow();
     uint32_t cols = dst.GetValidCol();
-    PTO_ASSERT(rows == src.GetValidRow() && cols == src.GetValidCol(), "TCVT FP4/FP8 valid regions must agree.");
-    PTO_ASSERT(
-        rows <= TileDataS::Rows && rows <= TileDataD::Rows && cols <= TileDataS::Cols && cols <= TileDataD::Cols,
-        "TCVT FP4/FP8 valid region exceeds physical tile bounds.");
+    checkFp4E2M1ToE4M3(dst, src, rows, cols);
     implTCVTFp4E2M1ToE4M3<TileDataD, TileDataS>(dst.data(), src.data(), rows, cols);
 }
 #endif // PTO_NPU_ARCH_A5

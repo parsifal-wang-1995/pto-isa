@@ -28,18 +28,18 @@ PTO_INTERNAL T makeTile(unsigned rows, unsigned cols)
     }
 }
 
-template <int SR, int SC, int DR, int DC, int VR, int VC, bool NZ, bool Compact, bool Dynamic>
+template <int SR, int SC, int DR, int DC, int VR, int VC, bool NZ, int Compact, bool Dynamic>
 __global__ AICORE void runFp4Lut(
     __gm__ uint8_t* dst, __gm__ uint8_t* src, unsigned rows, unsigned cols, int round, int api)
 {
     constexpr int srcBytes = SR * SC / 2;
-    constexpr int dstBytes = DR * DC + 2 * kGuardBytes;
     using Source =
         Tile<TileType::Vec, float4_e2m1x2_t, SR, SC, BLayout::RowMajor, Dynamic ? DYNAMIC : VR, Dynamic ? DYNAMIC : VC>;
     using Destination = Tile<
         TileType::Vec, float8_e4m3_t, DR, DC, NZ ? BLayout::ColMajor : BLayout::RowMajor, Dynamic ? DYNAMIC : VR,
         Dynamic ? DYNAMIC : VC, NZ ? SLayout::RowMajor : SLayout::NoneBox, TileConfig::fractalABSize, PadValue::Null,
-        Compact ? CompactMode::Normal : CompactMode::Null>;
+        Compact == 2 ? CompactMode::RowPlusOne : (Compact == 1 ? CompactMode::Normal : CompactMode::Null)>;
+    constexpr int dstBytes = Destination::StorageBytes + 2 * kGuardBytes;
     auto source = makeTile<Source, Dynamic>(rows, cols);
     auto destination = makeTile<Destination, Dynamic>(rows, cols);
     Tile<TileType::Vec, uint8_t, 1, srcBytes> rawInput;

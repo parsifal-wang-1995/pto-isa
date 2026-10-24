@@ -12,6 +12,7 @@ See LICENSE in the root of the software repository for the full text of the Lice
 #define TCVT_HPP
 
 #include <pto/common/constants.hpp>
+#include <pto/common/tcvt_fp4.hpp>
 #include <pto/common/pto_tile.hpp>
 #include <pto/common/type.hpp>
 #include "pto/cpu/tile_offsets.hpp"
@@ -240,7 +241,14 @@ inline T from_double_value(double val)
 template <typename D, typename S>
 inline D convert_value(S val, RoundMode mode, SaturationMode satMode = SaturationMode::OFF)
 {
-    if constexpr (is_float_like_v<S> && is_fp8_v<D>) {
+    if constexpr (std::is_same_v<S, float4_e2m1x2_t> && std::is_same_v<D, float8_e4m3_t>) {
+        // Exact widening must retain the raw sign of FP4 negative zero. The
+        // legacy FP4 numeric decoder cannot represent that sign reliably.
+        const uint8_t code = val.RawData() & 0x0f;
+        const uint8_t magnitude = code & 0x07;
+        const uint8_t encoded = magnitude < 2 ? magnitude * 0x30 : 0x30 + magnitude * 4;
+        return D::FromRaw(static_cast<uint8_t>(((code & 0x08) << 4) | encoded));
+    } else if constexpr (is_float_like_v<S> && is_fp8_v<D>) {
         return D(static_cast<double>(val), mode, satMode);
     } else if constexpr (is_fp4_v<S> && is_fp4_v<D>) {
         return D::FromRaw(val.RawData());
@@ -313,8 +321,13 @@ PTO_INTERNAL void TCVT_IMPL(
     TileDataD& dst, TileDataS& src, RoundMode mode, SaturationMode satMode, bool needSetCtrl = true)
 {
     (void)needSetCtrl;
-    uint16_t rows = src.GetValidRow();
-    uint16_t cols = src.GetValidCol();
+    const uint32_t rows = src.GetValidRow();
+    const uint32_t cols = src.GetValidCol();
+    if constexpr (
+        std::is_same_v<typename TileDataS::DType, float4_e2m1x2_t> &&
+        std::is_same_v<typename TileDataD::DType, float8_e4m3_t>) {
+        checkFp4E2M1ToE4M3(dst, src, rows, cols);
+    }
     if (satMode == SaturationMode::ON) {
         TCvt_Impl<TileDataD, TileDataS, SaturationMode::ON>(dst, src, rows, cols, mode);
     } else {

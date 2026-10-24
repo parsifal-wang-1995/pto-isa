@@ -62,19 +62,26 @@ PTO_INST RecordEvent TCVT(TileDataD &dst, TileDataS &src, TmpTileData &tmp, Roun
       E4M3 encodings `0x7f`/`0xff` decode as NaN; E5M2 decodes infinity and NaN separately.
       E8M0 conversions and the single-argument MXType encoding constructors are unchanged.
 - **A5 FP4 E2M1 to FP8 E4M3**:
-  - The direct `float4_e2m1x2_t -> float8_e4m3_t` pair is A5-only. It preserves every value exactly,
+  - The direct `float4_e2m1x2_t -> float8_e4m3_t` pair is supported on A5 and CPU_SIM. It preserves every value exactly,
     including negative zero, for every `RoundMode` and both saturation modes; temporary-tile overloads
     keep the same behavior and do not use temporary storage.
   - Source: `Vec`, RowMajor/NoneBox, `CompactMode::Null`, at least 64 physical logical columns and
     a multiple of 64. Logical FP4 columns/valid columns count nibbles; a physical row occupies `Cols / 2` bytes.
   - Destination: `Vec` ND (RowMajor/NoneBox, Null), or standard 512-byte NZ (ColMajor/RowMajor fractal,
-    Null or Normal). Valid rows and logical columns must agree, including dynamic or partial regions;
+    Null, Normal or RowPlusOne). Valid rows and logical columns must agree, including dynamic or partial regions;
     physical source/destination dimensions may differ. Invalid output bytes are preserved.
   - NZ physical rows must be a multiple of 16. For logical `(r,c)`, byte offset is
     `(c / 32) * panelRows * 32 + r * 32 + c % 32`, where Null uses physical `Rows`, and Normal uses
-    `ceil(validRows / 16) * 16`, matching Vec-to-Mat NZ transport. `RowPlusOne` is diagnosed as unsupported.
+    `ceil(validRows / 16) * 16`. RowPlusOne uses `ceil(validRows / 16) * 16 + 1`, matching the existing
+    Vec-to-Mat `TINSERT`/`TPUSH` transport, which removes the one-row gap between panels.
+  - Logical `Rows`, `Cols` and `Numel` are unchanged by RowPlusOne. Standard Vec NZ RowPlusOne tiles expose
+    `StorageNumel = (ceil(Rows / 16) * 16 + 1) * Cols` and `StorageBytes` (including packed-type storage).
+    Automatic tile allocation uses this padded count. Explicit `TASSIGN` callers must reserve at least
+    `StorageBytes`; a raw address cannot communicate the backing allocation size. For example, a logical
+    `128 x 256` FP8 tile requires 33024 bytes. TCVT still requires 16-aligned physical NZ `Rows`, and rejects
+    an unrepresentable 16-bit panel pitch or signed 32-bit byte offsets at compile time.
   - This pair uses a register byte LUT and writes ND/NZ directly, without an explicit UB table, index tile,
-    or ND intermediate. It does not add an FP4-to-FP8 implementation to A2/A3 or CPU_SIM.
+    or ND intermediate. A2/A3 support is unchanged. CPU_SIM models the same exact widening and compact NZ stride.
 - **Temporary tile**:
   - **CPU_SIM**: The two overloads with `tmp` produce the same result as their corresponding no-`tmp` overloads.
     CPU_SIM accepts `tmp` for source compatibility but neither calls `tmp.data()` nor accesses its storage. Portable

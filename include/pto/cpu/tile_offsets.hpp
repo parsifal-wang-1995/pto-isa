@@ -86,6 +86,24 @@ size_t inline GetTileElementOffset(size_t r, size_t c)
     }
 }
 
+// Compact NZ pitch depends on the current valid row extent, rather than Rows.
+// Keep the descriptor-only overload for callers explicitly addressing physical
+// noncompact storage; Tile element access uses this object-aware overload.
+template <typename TileData>
+size_t inline GetTileElementOffset(const TileData& tile, size_t r, size_t c)
+{
+    if constexpr (
+        TileData::Loc == TileType::Vec && !TileData::isRowMajor && TileData::SFractal == SLayout::RowMajor &&
+        TileData::SFractalSize == 512 && TileData::Compact != CompactMode::Null) {
+        const size_t alignedRows = (tile.GetValidRow() + 15u) / 16u * 16u;
+        const size_t pitch = alignedRows + (TileData::Compact == CompactMode::RowPlusOne ? 1 : 0);
+        return (c / TileData::InnerCols) * pitch * TileData::InnerCols + r * TileData::InnerCols +
+               c % TileData::InnerCols;
+    } else {
+        return GetTileElementOffset<TileData>(r, c);
+    }
+}
+
 template <typename ConvTile>
 size_t inline GetConvTileElementOffset(size_t r, size_t c, const std::vector<int64_t>& shapes)
 {
